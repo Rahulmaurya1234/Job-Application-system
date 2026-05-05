@@ -12,7 +12,6 @@ export default function Profile() {
     email: "",
   });
 
-  // ✅ ENV
   const API_URL =
     process.env.REACT_APP_API_URL ||
     "https://job-application-system-a1x3.onrender.com";
@@ -44,21 +43,13 @@ export default function Profile() {
       setLoading(true);
 
       const token = localStorage.getItem("token");
+      if (!token) return alert("User not logged in ❌");
 
-      if (!token) {
-        alert("User not logged in ❌");
-        return;
-      }
-
-      const res = await axios.put(
-        `${API_URL}/api/auth/update`,
-        form,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await axios.put(`${API_URL}/api/auth/update`, form, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const updatedUser = { ...user, ...res.data.user };
 
@@ -67,7 +58,6 @@ export default function Profile() {
       setEdit(false);
 
       alert("Profile updated ✅");
-
     } catch (error) {
       console.error(error);
       alert(error.response?.data?.msg || "Update failed ❌");
@@ -79,10 +69,10 @@ export default function Profile() {
   // 🔥 FILE SELECT
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
-
     if (!selected) return;
 
-    if (selected.type !== "application/pdf") {
+    // ✅ Better validation
+    if (!selected.name.toLowerCase().endsWith(".pdf")) {
       alert("Only PDF allowed ❌");
       return;
     }
@@ -98,11 +88,7 @@ export default function Profile() {
       setLoading(true);
 
       const token = localStorage.getItem("token");
-
-      if (!token) {
-        alert("Please login again ❌");
-        return;
-      }
+      if (!token) return alert("Please login again ❌");
 
       const formData = new FormData();
       formData.append("resume", file);
@@ -117,14 +103,14 @@ export default function Profile() {
         }
       );
 
-      // ✅ IMPORTANT: Cloudinary URL direct save
       const updatedUser = { ...user, resume: res.data.resume };
 
       localStorage.setItem("user", JSON.stringify(updatedUser));
       setUser(updatedUser);
 
-      alert("Resume uploaded ✅");
+      setFile(null); // ✅ reset file
 
+      alert("Resume uploaded ✅");
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.msg || "Upload failed ❌");
@@ -133,8 +119,18 @@ export default function Profile() {
     }
   };
 
+  // 🔥 FIX URL (safety for old data)
+  const getResumeUrl = () => {
+    if (!user?.resume) return null;
+
+    return user.resume.includes("/upload/") &&
+      !user.resume.includes("/raw/upload/")
+      ? user.resume.replace("/upload/", "/raw/upload/")
+      : user.resume;
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-8">
+    <div className="min-h-screen bg-slate-950 text-white p-8 pt-24">
       <div className="max-w-2xl mx-auto bg-slate-900 p-6 rounded-xl space-y-6">
 
         <h1 className="text-2xl font-bold">👤 Profile</h1>
@@ -193,9 +189,9 @@ export default function Profile() {
         <div className="border-t border-slate-700 pt-4">
           <h2 className="text-lg font-semibold">Resume</h2>
 
-          {user?.resume ? (
+          {getResumeUrl() ? (
             <a
-              href={user.resume}   // ✅ FIXED (NO API_URL)
+              href={getResumeUrl()}
               target="_blank"
               rel="noreferrer"
               className="text-emerald-400 underline"
@@ -211,6 +207,7 @@ export default function Profile() {
               type="file"
               accept="application/pdf"
               onChange={handleFileChange}
+              disabled={loading}
             />
 
             <button

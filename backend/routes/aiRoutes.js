@@ -15,17 +15,22 @@ router.get("/jobs", protect, async (req, res) => {
 
     let resumeUrl = user.resume;
 
-    // 🔥 IMPORTANT FIX (Cloudinary issue solve)
-    if (resumeUrl.includes("/upload/")) {
+    // ✅ Safety (agar kabhi old URL aa jaye)
+    if (resumeUrl.includes("/upload/") && !resumeUrl.includes("/raw/upload/")) {
       resumeUrl = resumeUrl.replace("/upload/", "/raw/upload/");
     }
 
-    console.log("Fixed Resume URL:", resumeUrl);
+    console.log("Using Resume URL:", resumeUrl);
 
     const aiRes = await axios.post(
       "https://job-application-system-1.onrender.com/analyze",
       { resumeUrl },
-      { timeout: 15000 } // 🔥 timeout add
+      {
+        timeout: 15000,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
     );
 
     res.json(aiRes.data);

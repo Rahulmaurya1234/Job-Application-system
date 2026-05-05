@@ -1,3 +1,4 @@
+import path from "path";
 import express from "express";
 import upload from "../config/multer.js";
 import { protect } from "../middleware/authMiddleware.js";
@@ -36,7 +37,13 @@ router.post(
         });
       }
 
-      user.resume = resumeUrl;
+      const extension = path.extname(new URL(resumeUrl).pathname);
+      if (!extension && req.file?.mimetype === "application/pdf") {
+        user.resume = `${resumeUrl}.pdf`;
+      } else {
+        user.resume = resumeUrl;
+      }
+
       await user.save();
 
       res.json({
