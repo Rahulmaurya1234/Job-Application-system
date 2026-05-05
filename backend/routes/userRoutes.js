@@ -19,15 +19,14 @@ router.post(
 
       console.log("FILE OBJECT:", req.file);
 
-      
       const user = await User.findById(req.user._id);
 
       if (!user) {
         return res.status(404).json({ msg: "User not found" });
       }
 
-      
-      const resumeUrl = rawUrl.replace("/upload/", "/raw/upload/");
+      // ✅ Direct use karo (already correct hai)
+      const resumeUrl = req.file.path;
 
       console.log("Saved Resume URL:", resumeUrl);
 
@@ -37,7 +36,6 @@ router.post(
         });
       }
 
-      
       user.resume = resumeUrl;
       await user.save();
 
