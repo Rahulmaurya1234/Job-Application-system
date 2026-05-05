@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+requests
+pdfminer.six
+pandas
+scikit-learn
+python-multipart
