@@ -4,10 +4,10 @@ import cloudinary from "./cloudinary.js";
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
+  params: async (req, file) => ({
     folder: "resumes",
-    resource_type: "auto", // ✅ FIXED
-  },
+    resource_type: "auto", // ✅ IMPORTANT
+  }),
 });
 
 const fileFilter = (req, file, cb) => {
@@ -17,7 +17,7 @@ const fileFilter = (req, file, cb) => {
   ) {
     cb(null, true);
   } else {
-    cb(null, false);
+    cb(new Error("Only PDF/DOC allowed"), false);
   }
 };
 

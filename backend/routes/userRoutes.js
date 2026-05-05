@@ -11,12 +11,15 @@ router.post(
   upload.single("resume"),
   async (req, res) => {
     try {
-      // file check
+      // ❌ file missing
       if (!req.file) {
         return res.status(400).json({
           msg: "Only PDF/DOC files allowed",
         });
       }
+
+      // 🔍 DEBUG
+      console.log("FILE OBJECT:", req.file);
 
       // user check
       const user = await User.findById(req.user._id);
@@ -25,9 +28,19 @@ router.post(
         return res.status(404).json({ msg: "User not found" });
       }
 
-      // ✅ Cloudinary URL save
-      user.resume = req.file.path;
+      // ✅ IMPORTANT FIX
+      const resumeUrl = req.file.secure_url || req.file.path;
 
+      console.log("Saved Resume URL:", resumeUrl);
+
+      if (!resumeUrl) {
+        return res.status(500).json({
+          msg: "Upload failed - no URL",
+        });
+      }
+
+      // save in DB
+      user.resume = resumeUrl;
       await user.save();
 
       res.json({
