@@ -85,7 +85,7 @@ export default function Navbar() {
 
                             {open && (
                                 <div className="absolute right-0 top-12 w-40 bg-slate-900 border rounded-xl p-2">
-                                    <Link to="/profile" className="block px-3 py-2 text-sm hover:bg-slate-800 rounded">
+                                    <Link to="/profile" className="text-white px-3 py-2 text-sm hover:bg-slate-800 rounded">
                                         Profile
                                     </Link>
                                     <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-slate-800 rounded">

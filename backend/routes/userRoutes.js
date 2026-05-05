@@ -11,24 +11,22 @@ router.post(
   upload.single("resume"),
   async (req, res) => {
     try {
-      // ❌ file missing
       if (!req.file) {
         return res.status(400).json({
           msg: "Only PDF/DOC files allowed",
         });
       }
 
-      // 🔍 DEBUG
       console.log("FILE OBJECT:", req.file);
 
-      // user check
+      
       const user = await User.findById(req.user._id);
 
       if (!user) {
         return res.status(404).json({ msg: "User not found" });
       }
 
-      // ✅ IMPORTANT FIX
+      
       const resumeUrl = req.file.secure_url || req.file.path;
 
       console.log("Saved Resume URL:", resumeUrl);
@@ -39,7 +37,7 @@ router.post(
         });
       }
 
-      // save in DB
+      const resumeUrl = rawUrl.replace("/upload/", "/raw/upload/");
       user.resume = resumeUrl;
       await user.save();
 

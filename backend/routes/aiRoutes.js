@@ -1,5 +1,3 @@
-// routes/aiRoutes.js
-
 import express from "express";
 import axios from "axios";
 import { protect } from "../middleware/authMiddleware.js";
@@ -9,28 +7,36 @@ const router = express.Router();
 
 router.get("/jobs", protect, async (req, res) => {
   try {
-    // 🔥 DB se current resume nikala
     const user = await User.findById(req.user._id);
 
     if (!user?.resume) {
       return res.status(400).json({ msg: "No resume uploaded ❌" });
     }
 
-    const resumeUrl = user.resume;
+    let resumeUrl = user.resume;
 
-    console.log("Backend Resume URL:", resumeUrl);
+    // 🔥 IMPORTANT FIX (Cloudinary issue solve)
+    if (resumeUrl.includes("/upload/")) {
+      resumeUrl = resumeUrl.replace("/upload/", "/raw/upload/");
+    }
 
-    // 🔥 AI ko bheja
+    console.log("Fixed Resume URL:", resumeUrl);
+
     const aiRes = await axios.post(
       "https://job-application-system-1.onrender.com/analyze",
-      { resumeUrl }
+      { resumeUrl },
+      { timeout: 15000 } // 🔥 timeout add
     );
 
     res.json(aiRes.data);
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ msg: "AI fetch failed ❌" });
+    console.error("AI ERROR:", error.response?.data || error.message);
+
+    res.status(500).json({
+      msg: "AI fetch failed ❌",
+      error: error.response?.data || error.message
+    });
   }
 });
 
