@@ -285,10 +285,22 @@ This system combines:
 "email": "rahul@test.com",
 "password": "123456"
 }
+Haan 👍 abhi tumhare 2 services live ho chuki hain — main clearly list kar deta hoon 👇
 
-Primary → #10B981
-Secondary → #0F766E
-Background → #F9FAFB
-Text → #111827
-Subtext → #6B7280
-Success → #16A34A
+🚀 ✅ 1. Backend (Node API)
+👉 URL:
+https://job-application-system-a1x3.onrender.com
+👉 Important endpoint:
+https://job-application-system-a1x3.onrender.com/api/jobs
+✔ Ye jobs data de raha hai
+✔ MongoDB + API handle kar raha hai
+
+🤖 ✅ 2. AI Service (Python FastAPI)
+👉 URL:
+https://job-application-system-1.onrender.com
+👉 Test endpoint:
+https://job-application-system-1.onrender.com/docs
+✔ Ye resume analyze karta hai
+✔ job matching karta hai
+
+

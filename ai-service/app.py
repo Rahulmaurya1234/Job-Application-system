@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import html
 import re
+import os
+import tempfile
 from functools import lru_cache
 
 import pandas as pd
@@ -17,6 +19,11 @@ import uvicorn
 # ================= CONFIG =================
 REQUEST_TIMEOUT = 12
 USER_AGENT = "Mozilla/5.0"
+
+BACKEND_URL = os.getenv(
+    "BACKEND_URL",
+    "https://job-application-system-a1x3.onrender.com"
+)
 
 EMPTY_JOB_COLUMNS = [
     "title", "company", "description", "url",
@@ -52,18 +59,26 @@ def _clean(text):
 # ================= RESUME =================
 def parse_resume(file_bytes):
     try:
-        with open("temp.pdf", "wb") as f:
-            f.write(file_bytes)
+        # ✅ safe temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(file_bytes)
+            temp_path = tmp.name
 
-        text = extract_text("temp.pdf") or ""
+        text = extract_text(temp_path) or ""
         return _normalize(text)
-    except:
+
+    except Exception as e:
+        print("Resume parse error:", e)
         return ""
 
 # ================= JOB FETCH =================
 def _fetch_remoteok_jobs():
     try:
-        data = requests.get("https://remoteok.com/api", headers={"User-Agent": USER_AGENT}).json()
+        data = requests.get(
+            "https://remoteok.com/api",
+            headers={"User-Agent": USER_AGENT},
+            timeout=REQUEST_TIMEOUT
+        ).json()
     except:
         return _empty_job_frame()
 
@@ -90,7 +105,10 @@ def _fetch_remoteok_jobs():
 
 def _fetch_remotive_jobs():
     try:
-        data = requests.get("https://remotive.com/api/remote-jobs").json()
+        data = requests.get(
+            "https://remotive.com/api/remote-jobs",
+            timeout=REQUEST_TIMEOUT
+        ).json()
     except:
         return _empty_job_frame()
 
@@ -110,7 +128,10 @@ def _fetch_remotive_jobs():
 
 def _fetch_arbeitnow_jobs():
     try:
-        data = requests.get("https://www.arbeitnow.com/api/job-board-api").json()
+        data = requests.get(
+            "https://www.arbeitnow.com/api/job-board-api",
+            timeout=REQUEST_TIMEOUT
+        ).json()
     except:
         return _empty_job_frame()
 
@@ -128,10 +149,14 @@ def _fetch_arbeitnow_jobs():
 
     return pd.DataFrame(rows)
 
-# 🔥 LOCAL JOBS
+# ✅ FIXED LOCAL JOB FETCH
 def _fetch_local_jobs_from_node():
     try:
-        res = requests.get("http://localhost:5000/api/jobs")
+        res = requests.get(
+            f"{BACKEND_URL}/api/jobs",
+            timeout=REQUEST_TIMEOUT
+        )
+
         jobs = res.json()
 
         rows = []
@@ -148,7 +173,8 @@ def _fetch_local_jobs_from_node():
 
         return pd.DataFrame(rows)
 
-    except:
+    except Exception as e:
+        print("Local job fetch error:", e)
         return _empty_job_frame()
 
 # ================= JOB DATA =================
@@ -196,43 +222,64 @@ async def analyze(request: Request, resume: UploadFile = File(None)):
     try:
         file_bytes = None
 
-        # 🔥 TRY 1 → FILE
+        # ================= FILE UPLOAD =================
         if resume:
             try:
                 file_bytes = await resume.read()
-                print("Using uploaded file")
-            except:
-                pass
+            except Exception as e:
+                print("Upload read error:", e)
 
-        # 🔥 TRY 2 → URL
+        # ================= URL INPUT (FIXED) =================
         if not file_bytes:
             try:
-                body = await request.json()
-                resume_url = body.get("resumeUrl")
+                import json
+
+                raw_body = await request.body()
+                print("Raw body:", raw_body)
+
+                data = json.loads(raw_body.decode())
+                print("Parsed JSON:", data)
+
+                resume_url = data.get("resumeUrl")
 
                 if resume_url:
-                    print("Using resume URL")
-                    response = requests.get(resume_url)
+                    print("Fetching resume from:", resume_url)
 
-                    if response.status_code == 200:
+                    response = requests.get(
+                        resume_url,
+                        timeout=REQUEST_TIMEOUT,
+                        headers={"User-Agent": USER_AGENT}
+                    )
+
+                    print("Status:", response.status_code)
+                    print("Size:", len(response.content) if response.content else 0)
+
+                    if response.status_code == 200 and response.content:
                         file_bytes = response.content
-            except:
-                pass
+                    else:
+                        print("Failed to download resume")
 
-        # ❌ FAIL SAFE
+            except Exception as e:
+                print("JSON/URL error:", e)
+
+        # ================= VALIDATION =================
         if not file_bytes:
             return {"error": "No resume provided"}
 
-        # 🔥 AI PIPELINE
+        # ================= AI PIPELINE =================
         resume_text = parse_resume(file_bytes)
+
+        if not resume_text:
+            return {"error": "Resume parsing failed"}
+
         jobs = get_job_data()
         result = rank_jobs(resume_text, jobs)
 
         return result.head(10).to_dict(orient="records")
 
     except Exception as e:
+        print("Final error:", e)
         return {"error": str(e)}
-
 # ================= RUN =================
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=5001, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=10000)

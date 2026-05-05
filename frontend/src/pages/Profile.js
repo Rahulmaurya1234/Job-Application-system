@@ -5,59 +5,83 @@ export default function Profile() {
   const [user, setUser] = useState(null);
   const [edit, setEdit] = useState(false);
   const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
     email: "",
   });
 
+  // ✅ ENV
+  const API_URL =
+    process.env.REACT_APP_API_URL ||
+    "https://job-application-system-a1x3.onrender.com";
+
+  // 🔥 LOAD USER
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
-    if (storedUser) {
-      setUser(storedUser);
-      setForm({
-        name: storedUser.name,
-        email: storedUser.email,
-      });
+
+    if (!storedUser) {
+      alert("Please login again ❌");
+      return;
     }
+
+    setUser(storedUser);
+    setForm({
+      name: storedUser.name || "",
+      email: storedUser.email || "",
+    });
   }, []);
 
+  // 🔥 INPUT CHANGE
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // ✅ UPDATE PROFILE
+  // 🔥 UPDATE PROFILE
   const handleUpdate = async () => {
     try {
+      setLoading(true);
+
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        alert("User not logged in ❌");
+        return;
+      }
+
       const res = await axios.put(
-        "http://localhost:5000/api/auth/update",
+        `${API_URL}/api/auth/update`,
         form,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
       const updatedUser = { ...user, ...res.data.user };
+
       localStorage.setItem("user", JSON.stringify(updatedUser));
       setUser(updatedUser);
       setEdit(false);
 
       alert("Profile updated ✅");
+
     } catch (error) {
-      console.log(error.response?.data);
-      alert(error.response?.data?.msg || "Update failed");
+      console.error(error);
+      alert(error.response?.data?.msg || "Update failed ❌");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ✅ FILE SELECT (VALIDATION)
+  // 🔥 FILE SELECT
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
 
     if (!selected) return;
 
-    // 🔥 only pdf allow
     if (selected.type !== "application/pdf") {
       alert("Only PDF allowed ❌");
       return;
@@ -66,33 +90,46 @@ export default function Profile() {
     setFile(selected);
   };
 
-  // ✅ UPLOAD RESUME
+  // 🔥 UPLOAD RESUME
   const handleUpload = async () => {
-    if (!file) return alert("Select PDF file");
+    if (!file) return alert("Select PDF file ❌");
 
     try {
+      setLoading(true);
+
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        alert("Please login again ❌");
+        return;
+      }
+
       const formData = new FormData();
       formData.append("resume", file);
 
       const res = await axios.post(
-        "http://localhost:5000/api/user/upload-resume",
+        `${API_URL}/api/user/upload-resume`,
         formData,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
+      // ✅ IMPORTANT: Cloudinary URL direct save
       const updatedUser = { ...user, resume: res.data.resume };
 
       localStorage.setItem("user", JSON.stringify(updatedUser));
       setUser(updatedUser);
 
       alert("Resume uploaded ✅");
+
     } catch (err) {
-      console.log(err.response?.data);
+      console.error(err);
       alert(err.response?.data?.msg || "Upload failed ❌");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -113,7 +150,7 @@ export default function Profile() {
               className="w-full p-2 bg-slate-800 rounded mt-1"
             />
           ) : (
-            <p>{user?.name}</p>
+            <p>{user?.name || "N/A"}</p>
           )}
         </div>
 
@@ -128,18 +165,19 @@ export default function Profile() {
               className="w-full p-2 bg-slate-800 rounded mt-1"
             />
           ) : (
-            <p>{user?.email}</p>
+            <p>{user?.email || "N/A"}</p>
           )}
         </div>
 
-        {/* EDIT */}
+        {/* EDIT BUTTON */}
         <div className="flex gap-3">
           {edit ? (
             <button
               onClick={handleUpdate}
+              disabled={loading}
               className="bg-green-600 px-4 py-2 rounded"
             >
-              Save
+              {loading ? "Saving..." : "Save"}
             </button>
           ) : (
             <button
@@ -157,7 +195,7 @@ export default function Profile() {
 
           {user?.resume ? (
             <a
-              href={`http://localhost:5000/${user.resume}`}
+              href={user.resume}   // ✅ FIXED (NO API_URL)
               target="_blank"
               rel="noreferrer"
               className="text-emerald-400 underline"
@@ -168,7 +206,6 @@ export default function Profile() {
             <p className="text-red-400">No resume uploaded ❌</p>
           )}
 
-          {/* UPLOAD */}
           <div className="mt-4">
             <input
               type="file"
@@ -178,9 +215,14 @@ export default function Profile() {
 
             <button
               onClick={handleUpload}
+              disabled={loading}
               className="bg-purple-600 px-4 py-2 rounded mt-2"
             >
-              {user?.resume ? "Replace Resume" : "Upload Resume"}
+              {loading
+                ? "Uploading..."
+                : user?.resume
+                ? "Replace Resume"
+                : "Upload Resume"}
             </button>
           </div>
         </div>

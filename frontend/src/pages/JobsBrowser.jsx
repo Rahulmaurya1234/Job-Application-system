@@ -33,7 +33,16 @@ export default function JobsBrowser() {
   const [aiJobs, setAiJobs] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // 🔥 UNIFIED FILTER (AI + LOCAL)
+  // ✅ ENV
+  const API_URL =
+    process.env.REACT_APP_API_URL ||
+    "https://job-application-system-a1x3.onrender.com";
+
+  const AI_URL =
+    process.env.REACT_APP_AI_URL ||
+    "https://job-application-system-1.onrender.com";
+
+  // 🔥 FILTER LOGIC
   const finalJobs = useMemo(() => {
     const data = aiJobs.length > 0 ? aiJobs : jobs;
 
@@ -43,39 +52,22 @@ export default function JobsBrowser() {
       const loc = (job.location || "remote").toLowerCase();
       const type = job.type || "Remote";
 
-      const matchesQuery =
-        query === "" ||
-        title.includes(query.toLowerCase()) ||
-        company.includes(query.toLowerCase());
-
-      const matchesLocation =
-        location === "" ||
-        loc.includes(location.toLowerCase());
-
-      const matchesType =
-        activeTypes.length === 0 ||
-        activeTypes.includes(type);
-
-      const matchesLocationFilter =
-        locationFilter === "All" ||
-        (locationFilter === "Remote" && loc.includes("remote")) ||
-        (locationFilter === "Onsite" && !loc.includes("remote"));
-
-      const matchesRole =
-        roleFilter === "All" ||
-        title.includes(roleFilter.toLowerCase());
-
       return (
-        matchesQuery &&
-        matchesLocation &&
-        matchesType &&
-        matchesLocationFilter &&
-        matchesRole
+        (query === "" ||
+          title.includes(query.toLowerCase()) ||
+          company.includes(query.toLowerCase())) &&
+        (location === "" || loc.includes(location.toLowerCase())) &&
+        (activeTypes.length === 0 || activeTypes.includes(type)) &&
+        (locationFilter === "All" ||
+          (locationFilter === "Remote" && loc.includes("remote")) ||
+          (locationFilter === "Onsite" && !loc.includes("remote"))) &&
+        (roleFilter === "All" ||
+          title.includes(roleFilter.toLowerCase()))
       );
     });
   }, [aiJobs, query, location, activeTypes, locationFilter, roleFilter]);
 
-  // 🔥 AI CALL
+  // 🔥 AI JOB FETCH (FINAL FIXED)
   const fetchAIJobs = async () => {
     try {
       setLoading(true);
@@ -84,23 +76,46 @@ export default function JobsBrowser() {
 
       if (!user?.resume) {
         alert("No resume uploaded ❌");
-        setLoading(false);
         return;
       }
 
+      // ✅ CLOUDINARY FIX (MOST IMPORTANT)
+      const resumeUrl = user.resume.includes("/raw/upload")
+        ? user.resume.replace("/raw/upload", "/upload")
+        : user.resume;
+
+      console.log("Fixed Resume URL:", resumeUrl);
+
       const res = await axios.post(
-        "http://127.0.0.1:5001/analyze",
+        `${AI_URL}/analyze`,
         {
-          resumeUrl: `http://localhost:5000/${user.resume}`,
+          resumeUrl: resumeUrl,
+        },
+        {
+          timeout: 15000,
         }
       );
 
+      console.log("AI response:", res.data);
+
+      // ✅ ERROR HANDLE
+      if (!res.data || res.data.error) {
+        alert(res.data?.error || "No jobs returned ❌");
+        return;
+      }
+
       setAiJobs(res.data);
-      setLoading(false);
 
     } catch (err) {
-      console.error(err);
-      alert("Error fetching jobs");
+      console.error("AI ERROR:", err);
+
+      if (err.code === "ECONNABORTED") {
+        alert("AI server timeout ❌");
+      } else {
+        alert(err.response?.data?.msg || "AI server error ❌");
+      }
+
+    } finally {
       setLoading(false);
     }
   };
@@ -111,91 +126,76 @@ export default function JobsBrowser() {
         <div className="grid gap-8 xl:grid-cols-[0.95fr_1.25fr]">
 
           {/* SIDEBAR */}
-          <aside className="rounded-[2rem] border border-white/10 bg-slate-900/80 p-6">
-
-            {/* 🔥 TITLE */}
-            <h2 className="text-xl font-semibold text-white">Filters</h2>
-            <p className="text-sm text-slate-400 mt-1">
-                Narrow down jobs based on your preferences
-            </p>
+          <aside className="rounded-2xl border border-white/10 bg-slate-900 p-6">
+            <h2 className="text-xl font-semibold">Filters</h2>
 
             <div className="mt-6 space-y-4">
 
-                {/* LOCATION FILTER */}
-                <div>
-                <label className="text-sm text-slate-400">Work Type</label>
-                <select
-                    value={locationFilter}
-                    onChange={(e) => setLocationFilter(e.target.value)}
-                    className="w-full p-3 rounded-xl bg-slate-800 text-white mt-1"
-                >
-                    <option>All</option>
-                    <option>Remote</option>
-                    <option>Onsite</option>
-                </select>
-                </div>
+              <select
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="w-full p-3 bg-slate-800 rounded"
+              >
+                <option>All</option>
+                <option>Remote</option>
+                <option>Onsite</option>
+              </select>
 
-                {/* ROLE FILTER */}
-                <div>
-                <label className="text-sm text-slate-400">Role</label>
-                <select
-                    value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
-                    className="w-full p-3 rounded-xl bg-slate-800 text-white mt-1"
-                >
-                    <option>All</option>
-                    <option>Engineer</option>
-                    <option>Researcher</option>
-                    <option>Designer</option>
-                </select>
-                </div>
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="w-full p-3 bg-slate-800 rounded"
+              >
+                <option>All</option>
+                <option>Engineer</option>
+                <option>Researcher</option>
+                <option>Designer</option>
+              </select>
 
             </div>
-
-  {/* 🔥 EXTRA INFO */}
-  <div className="mt-6 p-4 rounded-xl bg-slate-800/60 text-sm text-slate-300">
-    💡 Tip: Use filters to find jobs that match your skills faster.
-  </div>
-
-</aside>
+          </aside>
 
           {/* MAIN */}
           <main className="space-y-6">
 
-            <div className="rounded-[2rem] border border-white/10 bg-slate-900/80 p-6">
-              <div className="flex justify-between">
+            <div className="flex justify-between bg-slate-900 p-6 rounded-2xl">
+              <h2 className="text-2xl">Browse Jobs</h2>
 
-                <h2 className="text-3xl text-white">Browse JOB </h2>
-
-                <button
-                  onClick={fetchAIJobs}
-                  className="px-5 py-3 bg-slate-800 rounded-xl"
-                >
-                  Most Recent
-                </button>
-
-              </div>
+              <button
+                onClick={fetchAIJobs}
+                disabled={loading}
+                className="bg-emerald-500 px-5 py-2 rounded"
+              >
+                {loading ? "Analyzing..." : "AI Jobs"}
+              </button>
             </div>
 
-            {loading && <p>Loading...</p>}
+            {loading && (
+              <p className="text-yellow-400">Fetching AI jobs...</p>
+            )}
 
-            <div className="space-y-5">
+            <div className="space-y-4">
               {finalJobs.map((job, index) => (
-                <div key={index} className="bg-slate-900 p-6 rounded-xl">
+                <div key={index} className="bg-slate-900 p-5 rounded-xl">
 
-                  <h3 className="text-xl">{job.title}</h3>
+                  <h3 className="text-lg">{job.title}</h3>
                   <p className="text-slate-400">
                     {job.company} • {job.location || "Remote"}
                   </p>
 
                   {job.similarity && (
-                    <p className="text-emerald-300">
+                    <p className="text-emerald-400">
                       {(job.similarity * 100).toFixed(1)}% Match
                     </p>
                   )}
 
                   {job.url && (
-                    <a href={job.url} target="_blank" rel="noreferrer">
+                    <a
+                      href={job.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-emerald-400 underline"
+                    >
                       Apply Now
                     </a>
                   )}
