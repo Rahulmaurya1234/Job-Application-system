@@ -16,28 +16,23 @@ export const checkATS = async (req, res) => {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      const strings = content.items.map(item => item.str);
-      text += strings.join(" ");
+      text += content.items.map(item => item.str).join(" ");
     }
 
     text = text.toLowerCase();
 
-    // 🔥 ATS LOGIC START
     let score = 0;
 
-    // 🔹 1. Keywords (Tech + Non-Tech)
-    const techKeywords = [
-      "javascript","react","node","python","java","mongodb","sql","aws","docker","api"
-    ];
+    // 🔹 1. Keywords (weighted)
+    const techKeywords = ["javascript","react","node","python","java","mongodb","sql","aws","docker","api"];
+    const nonTechKeywords = ["management","sales","marketing","communication","leadership","strategy","analytics","excel"];
 
-    const nonTechKeywords = [
-      "management","sales","marketing","communication","leadership","strategy","analytics","excel"
-    ];
+    const techMatches = techKeywords.filter(k => text.includes(k));
+    const nonTechMatches = nonTechKeywords.filter(k => text.includes(k));
 
-    const allKeywords = [...techKeywords, ...nonTechKeywords];
-
-    const matchedKeywords = allKeywords.filter(k => text.includes(k));
-    const keywordScore = (matchedKeywords.length / allKeywords.length) * 40;
+    const keywordScore =
+      ((techMatches.length * 2 + nonTechMatches.length) /
+        (techKeywords.length * 2 + nonTechKeywords.length)) * 30;
 
     score += keywordScore;
 
@@ -56,35 +51,56 @@ export const checkATS = async (req, res) => {
 
     // 🔹 4. Length
     const wordCount = text.split(/\s+/).length;
-    const lengthScore = wordCount > 300 ? 10 : 5;
+    const lengthScore = wordCount > 300 ? 10 : wordCount > 150 ? 7 : 3;
 
     score += lengthScore;
 
-    // 🔹 5. Readability
-    const readabilityScore = text.length > 1000 ? 5 : 2;
+    // 🔹 5. Readability (basic)
+    const sentenceCount = text.split(/[.!?]/).length;
+    const avgWordsPerSentence = wordCount / sentenceCount;
+
+    let readabilityScore = 5;
+    if (avgWordsPerSentence > 25) readabilityScore = 2;
+    if (avgWordsPerSentence < 8) readabilityScore = 3;
 
     score += readabilityScore;
 
-    // 🔹 6. Role Detection
-    const techMatches = techKeywords.filter(k => text.includes(k)).length;
-    const nonTechMatches = nonTechKeywords.filter(k => text.includes(k)).length;
+    // 🔹 6. Action Verbs (VERY IMPORTANT 🔥)
+    const actionVerbs = [
+      "developed","created","managed","led","designed","implemented",
+      "improved","increased","optimized","built","analyzed"
+    ];
 
-    const roleDetected = techMatches >= nonTechMatches ? "Tech" : "Non-Tech";
+    const actionMatches = actionVerbs.filter(v => text.includes(v));
+    const actionScore = (actionMatches.length / actionVerbs.length) * 10;
 
-    // 🔹 7. Missing Keywords
-    const missingKeywords = allKeywords
-      .filter(k => !text.includes(k))
-      .slice(0, 6);
+    score += actionScore;
 
-    // 🔹 8. Suggestions
+    // 🔹 7. Duplicate word penalty
+    const words = text.split(/\s+/);
+    const uniqueWords = new Set(words);
+    const duplicationRatio = uniqueWords.size / words.length;
+
+    if (duplicationRatio < 0.5) {
+      score -= 5; // penalty
+    }
+
+    // 🔹 8. Role Detection
+    const roleDetected = techMatches.length >= nonTechMatches.length ? "Tech" : "Non-Tech";
+
+    // 🔹 9. Missing Keywords
+    const allKeywords = [...techKeywords, ...nonTechKeywords];
+    const missingKeywords = allKeywords.filter(k => !text.includes(k)).slice(0, 8);
+
+    // 🔹 10. Suggestions (SMART)
     let suggestions = [];
 
-    if (matchedKeywords.length < 5) {
-      suggestions.push("Add more job-relevant keywords");
+    if (techMatches.length + nonTechMatches.length < 5) {
+      suggestions.push("Add more relevant keywords based on job description");
     }
 
     if (foundSections.length < 4) {
-      suggestions.push("Include sections like Projects, Skills, Certifications");
+      suggestions.push("Include sections like Projects, Certifications, Skills");
     }
 
     if (!hasNumbers) {
@@ -92,15 +108,47 @@ export const checkATS = async (req, res) => {
     }
 
     if (wordCount < 200) {
-      suggestions.push("Resume is too short, add more content");
+      suggestions.push("Resume is too short, add more detailed experience");
     }
 
-    // 🧹 Delete uploaded file
+    if (actionMatches.length < 3) {
+      suggestions.push("Use action verbs like 'Developed', 'Led', 'Optimized'");
+    }
+
+    if (duplicationRatio < 0.6) {
+      suggestions.push("Reduce repetition of words and improve vocabulary");
+    }
+
+    // 🧹 Delete file
     fs.unlinkSync(req.file.path);
 
-    // 📤 FINAL RESPONSE
+    // 🔥 FINAL SCORE FIX
+    score = Math.max(0, Math.min(100, score));
+    const finalScore = Math.round(score);
+
+    // 🎯 Grade system (as you asked)
+    let grade = "";
+    let message = "";
+
+    if (finalScore < 50) {
+      grade = "Bad";
+      message = "❌ Your resume needs major improvement";
+    } else if (finalScore < 70) {
+      grade = "Average";
+      message = "⚠️ Your resume is average, improve it";
+    } else if (finalScore < 90) {
+      grade = "Good";
+      message = "✅ Good resume, but can be improved";
+    } else {
+      grade = "Excellent";
+      message = "🔥 Excellent ATS-friendly resume";
+    }
+
+    // 📤 RESPONSE
     res.json({
-      atsScore: Math.round(score),
+      atsScore: finalScore,
+      grade,
+      message,
       roleDetected,
 
       breakdown: {
@@ -108,19 +156,13 @@ export const checkATS = async (req, res) => {
         sections: Math.round(sectionScore),
         impact: impactScore,
         length: lengthScore,
-        readability: readabilityScore
+        readability: readabilityScore,
+        action: Math.round(actionScore)
       },
 
       foundSections,
       missingKeywords,
-      suggestions,
-
-      message:
-        score > 80
-          ? "Excellent ATS Resume 🚀"
-          : score > 60
-          ? "Good Resume 👍"
-          : "Needs Improvement ❌"
+      suggestions
     });
 
   } catch (err) {
