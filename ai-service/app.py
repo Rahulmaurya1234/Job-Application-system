@@ -155,66 +155,87 @@ async def analyze(request: Request, resume: UploadFile = File(None)):
 
         # ===== FILE UPLOAD =====
         if resume:
-            file_bytes = await resume.read()
+            try:
+                file_bytes = await resume.read()
+                print("Uploaded file size:", len(file_bytes))
+            except Exception as e:
+                print("File read error:", e)
 
         # ===== JSON URL =====
         if not file_bytes:
-            raw_body = await request.body()
-            print("Raw body:", raw_body)
-
             try:
-                data = json.loads(raw_body.decode())
+                data = await request.json()
             except:
                 data = {}
-
-            print("Parsed JSON:", data)
 
             resume_url = data.get("resumeUrl")
 
             if resume_url:
                 print("Fetching:", resume_url)
 
-                # 🔥 FIXED DOWNLOAD
-                response = requests.get(
-                    resume_url,
-                    timeout=REQUEST_TIMEOUT,
-                    headers={
-                        "User-Agent": "Mozilla/5.0",
-                        "Accept": "application/pdf",
-                    },
-                    allow_redirects=True
-                )
+                try:
+                    response = requests.get(
+                        resume_url,
+                        timeout=20,   #  reduce timeout
+                        headers={
+                            "User-Agent": "Mozilla/5.0"
+                        }
+                    )
 
-                content_type = response.headers.get("content-type", "")
-                content = response.content
+                    if response.status_code != 200:
+                        return {"error": "Failed to fetch resume"}
 
-                print("Status:", response.status_code)
-                print("Content-Type:", content_type)
-                print("Downloaded size:", len(content))
+                    if not response.content:
+                        return {"error": "Empty resume file"}
 
-                if response.status_code == 200 and content and "pdf" in content_type:
-                    file_bytes = content
-                else:
-                    print("Invalid PDF response ❌")
+                    file_bytes = response.content
+                    print("Downloaded size:", len(file_bytes))
+
+                except requests.exceptions.Timeout:
+                    return {"error": "Resume fetch timeout ❌"}
+
+                except Exception as e:
+                    print("Download error:", e)
+                    return {"error": "Resume download failed ❌"}
 
         # ===== VALIDATION =====
         if not file_bytes:
             return {"error": "No resume provided"}
 
-        # ===== PROCESS =====
-        resume_text = parse_resume(file_bytes)
+        # ===== PARSE =====
+        try:
+            resume_text = parse_resume(file_bytes)
+        except Exception as e:
+            print("Parsing crash:", e)
+            return {"error": "Resume parsing failed ❌"}
 
         if not resume_text:
-            return {"error": "Resume parsing failed"}
+            return {"error": "Empty resume content ❌"}
 
-        jobs = get_job_data()
-        result = rank_jobs(resume_text, jobs)
+        # ===== JOB FETCH =====
+        try:
+            jobs = get_job_data()
+        except Exception as e:
+            print("Job fetch error:", e)
+            jobs = _empty_job_frame()
 
-        return result.head(10).to_dict(orient="records")
+        if jobs.empty:
+            return {"error": "No jobs available"}
+
+        # ===== RANK =====
+        try:
+            result = rank_jobs(resume_text, jobs)
+        except Exception as e:
+            print("Ranking error:", e)
+            return {"error": "AI processing failed ❌"}
+
+        # LIMIT RESULT (important for speed)
+        return result.head(5).to_dict(orient="records")
 
     except Exception as e:
-        print("ERROR:", e)
-        return {"error": str(e)}
+        import traceback
+        traceback.print_exc()
+        return {"error": "Internal server error ❌"}
 
 # ================= RUN =================
 if __name__ == "__main__":
