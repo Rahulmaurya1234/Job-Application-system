@@ -69,56 +69,33 @@ export default function JobsBrowser() {
 
   // 🔥 AI JOB FETCH (FINAL FIXED)
   const fetchAIJobs = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const user = JSON.parse(localStorage.getItem("user"));
+    const token = localStorage.getItem("token");
 
-      if (!user?.resume) {
-        alert("No resume uploaded ❌");
-        return;
-      }
+    const res = await axios.get(`${API_URL}/api/ai/jobs`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-      // ✅ CLOUDINARY FIX (MOST IMPORTANT)
-      const resumeUrl = user.resume.includes("/raw/upload")
-        ? user.resume.replace("/raw/upload", "/upload")
-        : user.resume;
+    console.log("AI jobs:", res.data);
 
-      console.log("Fixed Resume URL:", resumeUrl);
-
-      const res = await axios.post(
-        `${AI_URL}/analyze`,
-        {
-          resumeUrl: resumeUrl,
-        },
-        {
-          timeout: 15000,
-        }
-      );
-
-      console.log("AI response:", res.data);
-
-      // ✅ ERROR HANDLE
-      if (!res.data || res.data.error) {
-        alert(res.data?.error || "No jobs returned ❌");
-        return;
-      }
-
-      setAiJobs(res.data);
-
-    } catch (err) {
-      console.error("AI ERROR:", err);
-
-      if (err.code === "ECONNABORTED") {
-        alert("AI server timeout ❌");
-      } else {
-        alert(err.response?.data?.msg || "AI server error ❌");
-      }
-
-    } finally {
-      setLoading(false);
+    if (!res.data || res.data.error) {
+      alert(res.data?.error || "No jobs ❌");
+      return;
     }
-  };
+
+    setAiJobs(res.data);
+
+  } catch (err) {
+    console.error(err);
+    alert("AI error ❌");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">

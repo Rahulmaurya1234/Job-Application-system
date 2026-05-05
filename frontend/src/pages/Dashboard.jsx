@@ -118,14 +118,14 @@ export default function Dashboard() {
 
           {resume && (
             <a
-              href={`${API_URL}/${resume}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-emerald-400 underline mt-2 block"
+                href={resume}   // ✅ FIXED
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-400 underline mt-2 block"
             >
-              View Resume
+                View Resume
             </a>
-          )}
+            )}
         </div>
 
         {/* AI INSIGHTS (static for now) */}
