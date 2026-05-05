@@ -19,7 +19,6 @@ import uvicorn
 
 # ================= CONFIG =================
 REQUEST_TIMEOUT = 30
-USER_AGENT = "Mozilla/5.0"
 
 BACKEND_URL = os.getenv(
     "BACKEND_URL",
@@ -49,11 +48,6 @@ def _empty_job_frame():
 def _normalize(text):
     return re.sub(r"\s+", " ", text).strip()
 
-def _clean(text):
-    text = html.unescape(str(text)).lower()
-    text = re.sub(r"[^a-z0-9\s]", " ", text)
-    return _normalize(text)
-
 # ================= RESUME =================
 def parse_resume(file_bytes):
     try:
@@ -71,11 +65,7 @@ def parse_resume(file_bytes):
 # ================= JOB FETCH =================
 def _fetch_remoteok_jobs():
     try:
-        data = requests.get(
-            "https://remoteok.com/api",
-            headers={"User-Agent": USER_AGENT},
-            timeout=REQUEST_TIMEOUT
-        ).json()
+        data = requests.get("https://remoteok.com/api", timeout=REQUEST_TIMEOUT).json()
     except:
         return _empty_job_frame()
 
@@ -96,10 +86,7 @@ def _fetch_remoteok_jobs():
 
 def _fetch_remotive_jobs():
     try:
-        data = requests.get(
-            "https://remotive.com/api/remote-jobs",
-            timeout=REQUEST_TIMEOUT
-        ).json()
+        data = requests.get("https://remotive.com/api/remote-jobs", timeout=REQUEST_TIMEOUT).json()
     except:
         return _empty_job_frame()
 
@@ -166,7 +153,7 @@ async def analyze(request: Request, resume: UploadFile = File(None)):
     try:
         file_bytes = None
 
-        # ===== FILE =====
+        # ===== FILE UPLOAD =====
         if resume:
             file_bytes = await resume.read()
 
@@ -187,23 +174,28 @@ async def analyze(request: Request, resume: UploadFile = File(None)):
             if resume_url:
                 print("Fetching:", resume_url)
 
+                # 🔥 FIXED DOWNLOAD
                 response = requests.get(
                     resume_url,
                     timeout=REQUEST_TIMEOUT,
-                    headers={"User-Agent": USER_AGENT},
-                    stream=True
+                    headers={
+                        "User-Agent": "Mozilla/5.0",
+                        "Accept": "application/pdf",
+                    },
+                    allow_redirects=True
                 )
 
-                content = b""
-                for chunk in response.iter_content(8192):
-                    if chunk:
-                        content += chunk
+                content_type = response.headers.get("content-type", "")
+                content = response.content
 
                 print("Status:", response.status_code)
+                print("Content-Type:", content_type)
                 print("Downloaded size:", len(content))
 
-                if response.status_code == 200 and content:
+                if response.status_code == 200 and content and "pdf" in content_type:
                     file_bytes = content
+                else:
+                    print("Invalid PDF response ❌")
 
         # ===== VALIDATION =====
         if not file_bytes:
@@ -226,4 +218,5 @@ async def analyze(request: Request, resume: UploadFile = File(None)):
 
 # ================= RUN =================
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
