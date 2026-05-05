@@ -27,7 +27,7 @@ router.post(
       }
 
       
-      const resumeUrl = req.file.secure_url || req.file.path;
+      const resumeUrl = rawUrl.replace("/upload/", "/raw/upload/");
 
       console.log("Saved Resume URL:", resumeUrl);
 
@@ -37,7 +37,7 @@ router.post(
         });
       }
 
-      const resumeUrl = rawUrl.replace("/upload/", "/raw/upload/");
+      
       user.resume = resumeUrl;
       await user.save();
 
